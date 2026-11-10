@@ -322,7 +322,7 @@ class _FqAppState extends State<FqApp> {
                         ),
                       );
                     },
-                    title: _listeningEdition ? '什锦听书' : '什锦铺',
+                    title: _listeningEdition ? 'LINRU听书' : '什锦铺',
                     debugShowCheckedModeBanner: false,
                     // OLED 纯黑只在深色下生效（浅色时 createTheme 直接忽略）。
                     theme: _theme(

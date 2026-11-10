@@ -18,6 +18,7 @@ class AudioOfflineSection extends StatefulWidget {
     required this.title,
     required this.cover,
     required this.toneId,
+    this.toneLabel = '',
     required this.chapters,
     this.currentIndex = 0,
     this.downloader,
@@ -30,6 +31,7 @@ class AudioOfflineSection extends StatefulWidget {
 
   /// 当前音色。同一章在不同音色下是两份资源，因此下载也按音色区分。
   final String toneId;
+  final String toneLabel;
   final List<Chapter> chapters;
   final int currentIndex;
 
@@ -126,6 +128,7 @@ class _AudioOfflineSectionState extends State<AudioOfflineSection> {
           title: widget.title,
           cover: widget.cover,
           toneId: widget.toneId,
+          toneLabel: widget.toneLabel,
           chapters: widget.chapters,
         ),
         chapters: pending,

@@ -38,8 +38,9 @@ class _AudioDownloadsPageState extends State<AudioDownloadsPage> {
   Future<void> _play(DownloadedAudioBook download) async {
     Map<String, dynamic>? history;
     try {
-      history = await AudioHistory(LibraryStore.instance)
-          .load(download.book.bookId);
+      history = await AudioHistory(
+        LibraryStore.instance,
+      ).load(download.book.bookId);
     } catch (_) {
       // A progress read failure still leaves the downloaded chapters playable.
     }
@@ -93,6 +94,7 @@ class _AudioDownloadsPageState extends State<AudioDownloadsPage> {
                     leading: const Icon(Icons.headphones),
                     title: Text(download.book.title),
                     subtitle: Text(
+                      '${download.book.displayToneLabel}\n'
                       '可离线听 · 已下载 ${download.chapters.length}/${download.book.chapters.length} 章'
                       ' · ${(download.bytes / (1024 * 1024)).toStringAsFixed(1)} MB',
                     ),

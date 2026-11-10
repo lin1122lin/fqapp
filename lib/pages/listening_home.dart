@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../services/audio_floating_routes.dart';
-import '../services/backend_service.dart';
 import '../services/release_update.dart';
 import 'about_page.dart';
+import 'audio_discover_page.dart';
 import 'audio_downloads_page.dart';
 import 'audio_page.dart';
-import 'search_page.dart';
 
 class ListeningHome extends StatefulWidget {
   const ListeningHome({super.key});
@@ -57,47 +56,11 @@ class _ListeningHomeState extends State<ListeningHome> {
     }
   }
 
-  Future<void> _find() async {
-    if (_opening) return;
-    setState(() => _opening = true);
-    try {
-      await BackendService.instance.start().timeout(
-        const Duration(seconds: 12),
-      );
-      if (!mounted) return;
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(builder: (_) => const SearchPage(audioOnly: true)),
-      );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('暂时无法联网找书，已下载的书仍可播放。')));
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _opening = false;
-          _recent = loadRecentListen();
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     AudioFloatingRouteScope.configure(context, hidden: false);
     final page = switch (_tab) {
-      1 => Scaffold(
-        appBar: AppBar(title: const Text('找书')),
-        body: Center(
-          child: FilledButton.icon(
-            onPressed: _opening ? null : _find,
-            icon: const Icon(Icons.search),
-            label: Text(_opening ? '正在连接…' : '搜索有声书'),
-          ),
-        ),
-      ),
+      1 => const AudioDiscoverPage(),
       2 => AudioDownloadsPage(onFind: () => setState(() => _tab = 1)),
       _ => _continuePage(),
     };

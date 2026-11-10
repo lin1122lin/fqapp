@@ -102,6 +102,7 @@ void main() {
         title: '离线听书',
         cover: '',
         toneId: 'toneA',
+        toneLabel: '温柔女声',
         chapters: [
           Chapter(itemId: 'ch1', title: '第一章', volumeName: ''),
           Chapter(itemId: 'ch2', title: '第二章', volumeName: ''),
@@ -116,6 +117,7 @@ void main() {
     }
     final cached = (await store.downloadedBooks()).single;
     expect(cached.book.title, '离线听书');
+    expect(cached.book.displayToneLabel, '温柔女声');
     expect(cached.chapters.map((chapter) => chapter.itemId), ['ch1', 'ch3']);
     expect(cached.bytes, 32);
   });

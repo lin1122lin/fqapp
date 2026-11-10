@@ -29,7 +29,9 @@ import 'search_page.dart';
 ///
 /// 数据一次 GET 一个频道（`category_tab` 不同瓦片不同）。
 class CategoryPage extends StatefulWidget {
-  const CategoryPage({super.key, this.loader});
+  const CategoryPage({super.key, this.loader, this.audioOnly = false});
+
+  final bool audioOnly;
 
   /// 数据源注入（生产默认 [ApiClient.categoryFront]；测试替换，同
   /// [SearchPage] 的 loader 规矩——页测不落网络）。
@@ -71,7 +73,7 @@ int _chipColumnsFor(double contentWidth) => (contentWidth / _chipTargetWidth)
 class _CategoryPageState extends State<CategoryPage> {
   CategoryFront? _front;
   String? _error;
-  int _tabValue = 1;
+  late int _tabValue = widget.audioOnly ? 3 : 1;
   int _selected = 0;
   bool _loading = false;
 
@@ -221,8 +223,11 @@ class _CategoryPageState extends State<CategoryPage> {
     };
     Navigator.of(context).push(
       SearchRoute<void>(
-        builder: (_) =>
-            SearchPage(initialQuery: query, initialCategory: category),
+        builder: (_) => SearchPage(
+          initialQuery: query,
+          initialCategory: category,
+          audioOnly: widget.audioOnly,
+        ),
       ),
     );
   }
@@ -238,9 +243,13 @@ class _CategoryPageState extends State<CategoryPage> {
         child: Column(
           children: [
             _TopBar(
-              tabs: front?.tabs ?? const [],
+              tabs: widget.audioOnly
+                  ? const [CategoryTab(name: '听书分类', value: '3')]
+                  : front?.tabs ?? const [],
               selected: _tabValue,
-              onSelect: (v) => _load(tab: int.tryParse(v) ?? 1),
+              onSelect: (v) {
+                if (!widget.audioOnly) _load(tab: int.tryParse(v) ?? 1);
+              },
               onSearch: _openSearch,
             ),
             if (_loading)

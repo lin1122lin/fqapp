@@ -65,6 +65,28 @@ void main() {
     expect(find.byKey(const ValueKey('category_tile_3_女帝')), findsNWidgets(2));
   });
 
+  testWidgets('listening edition loads only the audiobook category', (
+    tester,
+  ) async {
+    int? requestedTab;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: CategoryPage(
+          audioOnly: true,
+          loader: ({int tab = 1}) async {
+            requestedTab = tab;
+            return front();
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(requestedTab, 3);
+    expect(find.text('听书分类'), findsOneWidget);
+    expect(find.text('男生'), findsNothing);
+    expect(find.byKey(const ValueKey('category_tile_1_都市')), findsWidgets);
+  });
+
   testWidgets('chips form a 3-column equal-width grid', (tester) async {
     await pump(tester, front());
 

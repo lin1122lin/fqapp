@@ -1285,18 +1285,38 @@ class _AudioPageState extends State<AudioPage> {
   /// Downloads chapter audio for the current voice.
   Future<void> _showDownload() async {
     await _showHomeStyleSheet<void>(
-      (context) => HomeSheetFrame(
-        title: '下载听书',
-        children: [
-          AudioOfflineSection(
-            bookId: c._bookId,
-            title: c._title,
-            cover: c._cover,
-            toneId: c._toneId,
-            chapters: c._chapters,
-            currentIndex: c._index,
-          ),
-        ],
+      (context) => AnimatedBuilder(
+        animation: c,
+        builder: (context, _) {
+          final changing = c._switchingVersion || c._loading;
+          return HomeSheetFrame(
+            title: '下载听书',
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('下载音色 · $_currentToneLabel'),
+                subtitle: const Text('同一章的不同音色需分别下载，只下载想离线听的音色即可。'),
+                trailing: TextButton(
+                  onPressed: changing ? null : _showVoices,
+                  child: const Text('选择音色'),
+                ),
+              ),
+              if (changing)
+                const LinearProgressIndicator()
+              else
+                AudioOfflineSection(
+                  key: ValueKey((c._bookId, c._toneId)),
+                  bookId: c._bookId,
+                  title: c._title,
+                  cover: c._cover,
+                  toneId: c._toneId,
+                  toneLabel: _currentToneLabel,
+                  chapters: c._chapters,
+                  currentIndex: c._index,
+                ),
+            ],
+          );
+        },
       ),
     );
   }

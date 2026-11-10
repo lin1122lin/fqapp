@@ -115,6 +115,7 @@ class CachedAudioBook {
     required this.title,
     required this.cover,
     required this.toneId,
+    this.toneLabel = '',
     required List<Chapter> chapters,
   }) : chapters = List<Chapter>.unmodifiable(chapters);
 
@@ -122,13 +123,20 @@ class CachedAudioBook {
   final String title;
   final String cover;
   final String toneId;
+  final String toneLabel;
   final List<Chapter> chapters;
+
+  String get displayToneLabel {
+    if (toneLabel.isNotEmpty) return toneLabel;
+    return toneId == '0' ? '默认音色' : '音色 $toneId';
+  }
 
   Map<String, dynamic> toMap() => {
     'bookId': bookId,
     'title': title,
     'cover': cover,
     'toneId': toneId,
+    if (toneLabel.isNotEmpty) 'toneLabel': toneLabel,
     'chapters': [
       for (final chapter in chapters)
         {'itemId': chapter.itemId, 'title': chapter.title},
@@ -156,6 +164,7 @@ class CachedAudioBook {
       title: raw['title']?.toString() ?? '',
       cover: raw['cover']?.toString() ?? '',
       toneId: toneId,
+      toneLabel: raw['toneLabel']?.toString() ?? '',
       chapters: chapters,
     );
   }

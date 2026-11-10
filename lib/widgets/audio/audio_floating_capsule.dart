@@ -28,9 +28,8 @@ typedef RecentListenLoader = Future<RecentListen?> Function();
 /// its saved progress. Returns null otherwise.
 Future<RecentListen?> loadRecentListen() async {
   final history = await LibraryStore.instance.history();
-  if (history.isEmpty) return null;
-  final entry = history.first;
-  if (entry['kind'] != 'audio') return null;
+  final entry = history.where((item) => item['kind'] == 'audio').firstOrNull;
+  if (entry == null) return null;
   final bookId = historyContentId(entry);
   if (bookId.isEmpty) return null;
   final chapter = (entry['progress'] as num?)?.toDouble() ?? 0;
@@ -45,6 +44,15 @@ Future<RecentListen?> loadRecentListen() async {
     cover: cover,
     progress: progress.isFinite ? progress.clamp(0.0, 1.0) : 0,
     request: () async {
+      final downloads = await HiveAudioDownloadStore.instance.downloadedBooks();
+      final sameBook = downloads.where((item) => item.book.bookId == bookId);
+      final local =
+          sameBook
+              .where((item) => item.book.toneId == entry['toneId'])
+              .firstOrNull ??
+          sameBook.firstOrNull;
+      if (local != null) return offlineAudioRequest(local, entry);
+      await BackendService.instance.start();
       final volumes = await ApiClient.instance.directoryChapters(
         bookId,
         tab: '听书',
@@ -133,6 +141,7 @@ extension _AudioCapsule on _AudioPlaybackScopeState {
                 cover: session._cover,
                 chapters: session._chapters,
                 startIndex: session._index,
+                localOnly: request.localOnly,
                 historyStore: request.historyStore,
                 playerFactory: request.playerFactory,
                 sourceLoader: request.sourceLoader,
@@ -178,9 +187,8 @@ extension _AudioCapsule on _AudioPlaybackScopeState {
   void _toast(String message) {
     final context = widget.navigatorKey.currentContext;
     if (context == null) return;
-    ScaffoldMessenger.maybeOf(
-      context,
-    )?.showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showReaderVoices(BuildContext context, String bookId) async {

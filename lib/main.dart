@@ -4,7 +4,9 @@ import 'services/native_player.dart';
 import 'services/desktop_platform.dart';
 import 'services/platform_capabilities.dart';
 import 'services/platform_channel.dart';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -20,6 +22,7 @@ import 'pages/audio_page.dart';
 import 'pages/cached_books_page.dart';
 import 'pages/drama_page.dart';
 import 'pages/library_page.dart';
+import 'pages/listening_home.dart';
 import 'pages/mine_page.dart';
 import 'services/app_log.dart';
 import 'services/app_theme.dart';
@@ -319,7 +322,7 @@ class _FqAppState extends State<FqApp> {
                         ),
                       );
                     },
-                    title: '什锦铺',
+                    title: _listeningEdition ? '什锦听书' : '什锦铺',
                     debugShowCheckedModeBanner: false,
                     // OLED 纯黑只在深色下生效（浅色时 createTheme 直接忽略）。
                     theme: _theme(
@@ -342,8 +345,12 @@ class _FqAppState extends State<FqApp> {
                     localizationsDelegates:
                         GlobalMaterialLocalizations.delegates,
                     home: AppBootstrap(
-                      backendStarter: BackendService.instance.start,
-                      child: const RootShell(),
+                      backendStarter: _listeningEdition
+                          ? null
+                          : BackendService.instance.start,
+                      child: _listeningEdition
+                          ? const ListeningHome()
+                          : const RootShell(),
                     ),
                   ),
                 );
@@ -367,6 +374,9 @@ class _FqAppState extends State<FqApp> {
     style: style,
   );
 }
+
+bool get _listeningEdition =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
 /// Opens local data before any page can access LibraryStore's boxes. Failed
 /// initialization is retryable without clearing or replacing the user's data.

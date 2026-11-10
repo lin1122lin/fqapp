@@ -110,32 +110,37 @@ void main() {
     );
   }
 
-  Widget app({required FakeNativePlayer player, required List<String> loads}) =>
-      MaterialApp(
-        home: AudioPage(
-          bookId: 'book',
-          title: '测试听书',
-          chapters: [
-            Chapter(itemId: '1', title: '第1章', volumeName: ''),
-            Chapter(itemId: '2', title: '第2章', volumeName: ''),
-          ],
-          initialToneId: 'toneA',
-          historyStore: MemoryReaderStore(),
-          downloadStore: store,
-          voicesLoader: () async => const [],
-          extrasLoader: (bookId) async => const AudioExtras(),
-          sourceLoader: (itemId, {toneId}) async {
-            loads.add('$itemId:$toneId');
-            return AudioSource(
-              itemId: itemId,
-              url: 'https://cdn.invalid/$itemId.m4a',
-              toneId: toneId ?? 'toneA',
-              keyHex: 'ffeeddccbbaa99887766554433221100',
-            );
-          },
-          playerFactory: () => player,
-        ),
-      );
+  Widget app({
+    required FakeNativePlayer player,
+    required List<String> loads,
+    bool localOnly = false,
+    MemoryReaderStore? history,
+  }) => MaterialApp(
+    home: AudioPage(
+      bookId: 'book',
+      title: '测试听书',
+      chapters: [
+        Chapter(itemId: '1', title: '第1章', volumeName: ''),
+        Chapter(itemId: '2', title: '第2章', volumeName: ''),
+      ],
+      initialToneId: 'toneA',
+      historyStore: history ?? MemoryReaderStore(),
+      localOnly: localOnly,
+      downloadStore: store,
+      voicesLoader: () async => const [],
+      extrasLoader: (bookId) async => const AudioExtras(),
+      sourceLoader: (itemId, {toneId}) async {
+        loads.add('$itemId:$toneId');
+        return AudioSource(
+          itemId: itemId,
+          url: 'https://cdn.invalid/$itemId.m4a',
+          toneId: toneId ?? 'toneA',
+          keyHex: 'ffeeddccbbaa99887766554433221100',
+        );
+      },
+      playerFactory: () => player,
+    ),
+  );
 
   testWidgets('a downloaded chapter plays the local file, not the network', (
     tester,
@@ -171,6 +176,46 @@ void main() {
 
     expect(loads, ['1:toneA']);
     expect(player.calls, contains('create:https://cdn.invalid/1.m4a'));
+  });
+
+  testWidgets('offline-only playback restores the saved position', (
+    tester,
+  ) async {
+    store.chapters['1|toneA'] = downloaded();
+    final player = FakeNativePlayer();
+    final loads = <String>[];
+    final history = MemoryReaderStore(
+      entry: {
+        'id': 'book',
+        'kind': 'audio',
+        'chapterId': '1',
+        'position': 12,
+        'duration': 90,
+      },
+    );
+    await tester.pumpWidget(
+      app(player: player, loads: loads, localOnly: true, history: history),
+    );
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(player.calls, contains(startsWith('create:file://')));
+    expect(player.calls, contains('seek:12'));
+    expect(loads, isEmpty);
+  });
+
+  testWidgets('a missing file in offline-only mode never reaches the network', (
+    tester,
+  ) async {
+    final player = FakeNativePlayer();
+    final loads = <String>[];
+    await tester.pumpWidget(app(player: player, loads: loads, localOnly: true));
+    for (var i = 0; i < 12; i++) {
+      await tester.pump(const Duration(milliseconds: 20));
+    }
+    expect(loads, isEmpty);
+    expect(player.calls.where((call) => call.startsWith('create:')), isEmpty);
+    expect(find.text('离线音频不可用，请重新下载'), findsWidgets);
   });
 
   testWidgets('a record whose file was deleted falls back to the network', (

@@ -3,9 +3,8 @@
 //     ArchiveSection title block, ContentPanel rows, GlassTextButton)
 //   lib/feature_pages.dart (FeatureEntry/featurePadding vocabulary)
 // Mechanical substitutions:
-// - fqapp has no update service or account module: the version line stays the
-//   static `AboutPage.versionText` (never bumped here), update checking links
-//   to the GitHub release page, and the open-source licence entry keeps
+// - The version line stays the static `AboutPage.versionText`; update checking
+//   uses the fork's GitHub Releases, and the open-source licence entry keeps
 //   `showLicensePage` with the Wenku8 notices registered by
 //   `lib/services/third_party_licenses.dart` (assets/licenses/wenku8).
 // - `SettingsGroupCard`/`SettingsRow` are replaced by the archive
@@ -21,6 +20,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/release_update.dart';
 import '../widgets/home/home_design.dart';
 import '../widgets/settings/settings_widgets.dart';
 import '../widgets/wenku/wenku_ui.dart';
@@ -29,7 +29,9 @@ import '../widgets/wenku/wenku_ui.dart';
 /// intro paragraph, then archive panel rows (version, updates, licenses,
 /// source code, feedback, ...).
 class AboutPage extends StatelessWidget {
-  const AboutPage({super.key});
+  const AboutPage({super.key, this.listeningEdition = false});
+
+  final bool listeningEdition;
 
   /// Display version, kept in lockstep with pubspec.yaml's
   /// `version`. Without a package_info dependency the value is
@@ -54,6 +56,7 @@ class AboutPage extends StatelessWidget {
     final theme = Theme.of(context);
     final palette = HomePalette.of(context);
     final scheme = theme.colorScheme;
+    final repository = listeningEdition ? releaseRepository : 'ch6vip/fqapp';
 
     return ArchiveFeaturePage(
       title: '关于',
@@ -62,13 +65,19 @@ class AboutPage extends StatelessWidget {
         key: const ValueKey('about-scroll'),
         padding: featurePadding(context),
         children: [
-          const _AboutLogo(),
-          const SizedBox(height: 12),
-          const _AboutHeading(),
+          if (listeningEdition)
+            Text('什锦听书', style: theme.textTheme.headlineMedium)
+          else ...[
+            const _AboutLogo(),
+            const SizedBox(height: 12),
+            const _AboutHeading(),
+          ],
           const SizedBox(height: 16),
           Text(
-            '什锦铺把小说、短剧、漫剧、漫画和听书聚到一起。'
-            '所有签名与解密都在你的手机本地完成，不依赖第三方服务。',
+            listeningEdition
+                ? '基于开源项目 fqapp，可下载有声书后离线收听。'
+                : '什锦铺把小说、短剧、漫剧、漫画和听书聚到一起。'
+                      '所有签名与解密都在你的手机本地完成，不依赖第三方服务。',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: scheme.onSurfaceVariant,
               height: 1.7,
@@ -107,11 +116,15 @@ class AboutPage extends StatelessWidget {
                 _InfoRow(
                   icon: LucideIcons.square_arrow_out_up_right,
                   title: '检查更新',
-                  subtitle: '前往 GitHub 发布页查看新版本',
-                  onTap: () => _launchExternalUrl(
-                    context,
-                    'https://github.com/ch6vip/fqapp/releases',
-                  ),
+                  subtitle: listeningEdition
+                      ? '从 GitHub Releases 下载新版，可稍后安装'
+                      : '前往 GitHub 发布页查看新版本',
+                  onTap: listeningEdition
+                      ? () => _checkForUpdates(context)
+                      : () => _launchExternalUrl(
+                          context,
+                          'https://github.com/$repository/releases',
+                        ),
                 ),
                 _InfoRow(
                   icon: LucideIcons.scale,
@@ -129,10 +142,10 @@ class AboutPage extends StatelessWidget {
                 _InfoRow(
                   icon: LucideIcons.code_xml,
                   title: '源代码',
-                  subtitle: 'github.com/ch6vip/fqapp',
+                  subtitle: 'github.com/$repository',
                   onTap: () => _launchExternalUrl(
                     context,
-                    'https://github.com/ch6vip/fqapp',
+                    'https://github.com/$repository',
                   ),
                 ),
                 _InfoRow(
@@ -141,14 +154,16 @@ class AboutPage extends StatelessWidget {
                   subtitle: '前往 GitHub Issues 提交',
                   onTap: () => _launchExternalUrl(
                     context,
-                    'https://github.com/ch6vip/fqapp/issues',
+                    'https://github.com/$repository/issues',
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          const _SupportCard(),
+          if (!listeningEdition) ...[
+            const SizedBox(height: 20),
+            const _SupportCard(),
+          ],
           const SizedBox(height: 24),
           Center(
             child: Text(
@@ -169,6 +184,44 @@ class AboutPage extends StatelessWidget {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('已复制版本号')));
+  }
+
+  static Future<void> _checkForUpdates(BuildContext context) async {
+    try {
+      final update = await checkReleaseUpdate(versionText.split(' ').first);
+      if (!context.mounted) return;
+      if (update == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('暂无可下载的新版本')));
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('有新版本 ${update.version}'),
+          content: const Text('可以继续使用当前版本，等方便时再更新。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('稍后再说'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                unawaited(_launchExternalUrl(context, update.apk.toString()));
+              },
+              child: const Text('下载更新'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('暂时无法检查更新，请联网后重试')));
+    }
   }
 
   /// 微信赞赏码弹窗：大图 + 一句扫码提示，点遮罩或「关闭」退出。

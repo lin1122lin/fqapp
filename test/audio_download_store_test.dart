@@ -95,6 +95,31 @@ void main() {
     expect(await store.chapter('ch1', toneId: 'toneC'), isNull);
   });
 
+  test('offline library lists only intact files in catalogue order', () async {
+    await store.ensureBook(
+      CachedAudioBook(
+        bookId: 'book1',
+        title: '离线听书',
+        cover: '',
+        toneId: 'toneA',
+        chapters: [
+          Chapter(itemId: 'ch1', title: '第一章', volumeName: ''),
+          Chapter(itemId: 'ch2', title: '第二章', volumeName: ''),
+          Chapter(itemId: 'ch3', title: '第三章', volumeName: ''),
+        ],
+      ),
+    );
+    for (final id in ['ch3', 'ch2', 'ch1']) {
+      final record = chapter(itemId: id, bytes: 16);
+      await store.saveChapter(record);
+      if (id == 'ch2') File(record.filePath).writeAsBytesSync([1]);
+    }
+    final cached = (await store.downloadedBooks()).single;
+    expect(cached.book.title, '离线听书');
+    expect(cached.chapters.map((chapter) => chapter.itemId), ['ch1', 'ch3']);
+    expect(cached.bytes, 32);
+  });
+
   test('tone B does not read tone A key', () async {
     await store.saveChapter(chapter(toneId: 'toneA', keyHex: 'aa' * 16));
     await store.saveChapter(chapter(toneId: 'toneB', keyHex: 'bb' * 16));

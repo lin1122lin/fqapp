@@ -1,5 +1,6 @@
 import '../services/desktop_platform.dart';
 import '../widgets/desktop_chapter_sidebar.dart';
+
 import 'dart:async';
 import 'dart:io';
 
@@ -23,8 +24,8 @@ import '../services/audio_playback_choice.dart';
 import '../services/audio_subtitle_synth.dart';
 import '../services/audio_time_point_lookup.dart';
 import '../services/audio_preferences.dart';
+import '../services/backend_service.dart';
 import '../services/book_updates.dart';
-import '../services/chapter_cache_store.dart';
 import '../services/chapter_text_formatter.dart';
 import '../services/fair_memory.dart';
 import '../services/library_store.dart';
@@ -48,7 +49,6 @@ import '../widgets/audio/audio_sections.dart';
 import '../widgets/audio/audio_subtitle_scroller.dart';
 import '../widgets/audio/voice_settings_sheet.dart';
 import '../widgets/reader/reader_listen_capsule.dart';
-import '../widgets/chapter_cache_sheet.dart';
 import '../widgets/comment_images.dart';
 import '../widgets/home/home_design.dart';
 import '../widgets/home/home_sheet.dart';
@@ -62,6 +62,19 @@ part '../services/audio_playback_controller.dart';
 part '../widgets/audio/audio_playback_scope.dart';
 part '../widgets/audio/audio_floating_capsule.dart';
 part '../services/reader_audio_bridge.dart';
+
+AudioPage offlineAudioRequest(
+  DownloadedAudioBook download,
+  Map<String, dynamic>? history,
+) => AudioPage(
+  bookId: download.book.bookId,
+  title: download.book.title,
+  chapters: download.chapters,
+  initialToneId: download.book.toneId,
+  startIndex: resumeAudioChapterIndex(history, download.chapters) ?? 0,
+  localOnly: true,
+  resumeSession: false,
+);
 
 /// Foreground listening using the existing Android Media3 URL player.
 class AudioPage extends StatefulWidget {
@@ -97,6 +110,7 @@ class AudioPage extends StatefulWidget {
   /// Reopening the current work keeps its live session. A chapter/paragraph
   /// request can opt out to seek deliberately instead.
   final bool resumeSession;
+  final bool localOnly;
   final ReaderStore? historyStore;
   final NativePlayer Function()? playerFactory;
   final Future<AudioSource> Function(String itemId, {String? toneId})?
@@ -143,6 +157,7 @@ class AudioPage extends StatefulWidget {
     this.initialRate,
     this.autoplay = true,
     this.resumeSession = true,
+    this.localOnly = false,
     this.cover = '',
     this.historyStore,
     this.playerFactory,
@@ -420,7 +435,9 @@ class _AudioPageState extends State<AudioPage> {
       return content.isEmpty ? null : content;
     }
     // 与控制器一致：注入了播放器/音源的测试页面不偷偷走网络。
-    if (widget.sourceLoader != null || widget.playerFactory != null) {
+    if (widget.localOnly ||
+        widget.sourceLoader != null ||
+        widget.playerFactory != null) {
       return null;
     }
     try {
@@ -1265,34 +1282,21 @@ class _AudioPageState extends State<AudioPage> {
     );
   }
 
-  /// Caches the book's chapters for offline listening/reading.
+  /// Downloads chapter audio for the current voice.
   Future<void> _showDownload() async {
-    final cache = ChapterCacheStore.instance;
-    final book = CachedBook(
-      id: c._bookId,
-      title: c._title,
-      cover: c._cover,
-      chapters: c._chapters,
-    );
-    try {
-      await cache.saveBook(book);
-    } on Exception {
-      // A cache index failure must not block the sheet.
-    }
-    if (!mounted) return;
     await _showHomeStyleSheet<void>(
-      (context) => ChapterCacheSheet(
-        book: book,
-        currentIndex: c._index,
-        cache: cache,
-        loader: (chapter) => ApiClient.instance.contentText(chapter.itemId),
-        extraSection: AudioOfflineSection(
-          bookId: c._bookId,
-          title: c._title,
-          cover: c._cover,
-          toneId: c._toneId,
-          chapters: c._chapters,
-        ),
+      (context) => HomeSheetFrame(
+        title: '下载听书',
+        children: [
+          AudioOfflineSection(
+            bookId: c._bookId,
+            title: c._title,
+            cover: c._cover,
+            toneId: c._toneId,
+            chapters: c._chapters,
+            currentIndex: c._index,
+          ),
+        ],
       ),
     );
   }

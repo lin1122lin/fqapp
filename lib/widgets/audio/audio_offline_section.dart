@@ -19,6 +19,7 @@ class AudioOfflineSection extends StatefulWidget {
     required this.cover,
     required this.toneId,
     required this.chapters,
+    this.currentIndex = 0,
     this.downloader,
     this.store,
   });
@@ -30,6 +31,7 @@ class AudioOfflineSection extends StatefulWidget {
   /// 当前音色。同一章在不同音色下是两份资源，因此下载也按音色区分。
   final String toneId;
   final List<Chapter> chapters;
+  final int currentIndex;
 
   /// 测试注入用；生产走单例。
   final AudioDownloader? downloader;
@@ -111,8 +113,7 @@ class _AudioOfflineSectionState extends State<AudioOfflineSection> {
       if (task.bookId == widget.bookId && task.toneId == widget.toneId) task,
   ];
 
-  Future<void> _startDownload() async {
-    final pending = _pending;
+  Future<void> _startDownload(List<Chapter> pending) async {
     if (pending.isEmpty) return;
     setState(() {
       _busy = true;
@@ -192,6 +193,11 @@ class _AudioOfflineSectionState extends State<AudioOfflineSection> {
       ),
     );
     final pending = _pending;
+    final next = widget.chapters
+        .skip(widget.currentIndex)
+        .where((chapter) => !_downloaded.contains(chapter.itemId))
+        .take(10)
+        .toList();
     final downloadedLabel = downloaded == 0
         ? '尚未下载音频'
         : '已下载 $downloaded / $total 章 · ${_formatBytes(_bytes)}';
@@ -202,16 +208,9 @@ class _AudioOfflineSectionState extends State<AudioOfflineSection> {
         const Divider(height: 32),
         Text('离线音频', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        Text(
-          downloadedLabel,
-          key: const Key('audio_offline_summary'),
-        ),
+        Text(downloadedLabel, key: const Key('audio_offline_summary')),
         const SizedBox(height: 6),
-        Text(
-          '下载当前音色的讲书音频后，断网也能继续听。音频以加密形态保存在本地，'
-          '正文缓存与音频缓存互不影响。',
-          style: theme.textTheme.bodySmall,
-        ),
+        Text('下载完成后，可以在底栏「下载」里离线听。', style: theme.textTheme.bodySmall),
         const SizedBox(height: 12),
         Wrap(
           spacing: 8,
@@ -230,15 +229,20 @@ class _AudioOfflineSectionState extends State<AudioOfflineSection> {
                 label: const Text('暂停下载'),
               )
             else ...[
+              if (next.isNotEmpty && next.length < pending.length)
+                FilledButton(
+                  onPressed: _busy
+                      ? null
+                      : () => unawaited(_startDownload(next)),
+                  child: Text('从本章起下载 ${next.length} 章'),
+                ),
               FilledButton(
                 key: const Key('audio_offline_start'),
                 onPressed: _busy || pending.isEmpty
                     ? null
-                    : () => unawaited(_startDownload()),
+                    : () => unawaited(_startDownload(pending)),
                 child: Text(
-                  pending.isEmpty
-                      ? '本音色已全部下载'
-                      : '下载剩余 ${pending.length} 章音频',
+                  pending.isEmpty ? '本音色已全部下载' : '下载剩余 ${pending.length} 章音频',
                 ),
               ),
               if (tasks.any(

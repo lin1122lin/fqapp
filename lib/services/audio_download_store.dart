@@ -161,6 +161,12 @@ class CachedAudioBook {
   }
 }
 
+typedef DownloadedAudioBook = ({
+  CachedAudioBook book,
+  List<Chapter> chapters,
+  int bytes,
+});
+
 /// 听书音频的离线缓存。
 ///
 /// 只负责记录与文件归属；下载流程见 `audio_downloader.dart`，离线命中见
@@ -354,6 +360,50 @@ class HiveAudioDownloadStore implements AudioDownloadStore {
               value['itemId'] as String,
         };
       });
+
+  Future<List<DownloadedAudioBook>> downloadedBooks() => _serialize((
+    box,
+  ) async {
+    final root = await (await directory()).resolveSymbolicLinks();
+    final chaptersByBook = <String, Map<String, int>>{};
+    for (final key in box.keys.whereType<String>()) {
+      if (!key.startsWith('chapter:')) continue;
+      final record = CachedAudioChapter.fromMap(box.get(key));
+      if (record == null || record.bytes <= 0) continue;
+      if (box.get(_keyKey(record.itemId, record.toneId)) is! String) continue;
+      try {
+        final file = File(record.filePath);
+        if (!_within(root, await file.resolveSymbolicLinks()) ||
+            await file.length() != record.bytes) {
+          continue;
+        }
+      } on FileSystemException {
+        continue;
+      }
+      final bookKey = _bookKey(record.bookId, record.toneId);
+      (chaptersByBook[bookKey] ??= {})[record.itemId] = record.bytes;
+    }
+    final result = <DownloadedAudioBook>[];
+    for (final entry in chaptersByBook.entries) {
+      final book = CachedAudioBook.fromMap(box.get(entry.key));
+      if (book == null) continue;
+      final chapters = [
+        for (final chapter in book.chapters)
+          if (entry.value.containsKey(chapter.itemId)) chapter,
+      ];
+      if (chapters.isEmpty) continue;
+      result.add((
+        book: book,
+        chapters: chapters,
+        bytes: chapters.fold(
+          0,
+          (sum, chapter) => sum + entry.value[chapter.itemId]!,
+        ),
+      ));
+    }
+    result.sort((a, b) => a.book.title.compareTo(b.book.title));
+    return result;
+  });
 
   @override
   Future<void> removeChapter(String itemId, {required String toneId}) =>

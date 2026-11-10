@@ -139,14 +139,14 @@ class _AudioPlaybackController extends ChangeNotifier
     final cacheKey = '$nextId|$_toneId';
     if (_audioSourceCache.containsKey(cacheKey)) return;
     unawaited(
-      _loadSourceWithRetry(
-        nextId,
-      ).catchError((Object _) => AudioSource(itemId: nextId, url: '')),
+      _loadSourceWithRetry(nextId)
+          .catchError((Object _) => AudioSource(itemId: nextId, url: '')),
     );
   }
 
   /// Resolves the listening-page decorations. See [AudioExtras].
   Future<AudioExtras> _loadExtras() {
+    if (request.localOnly) return Future.value(const AudioExtras());
     final loader = request.extrasLoader;
     if (loader != null) return loader(_bookId);
     if (request.sourceLoader != null ||
@@ -160,6 +160,7 @@ class _AudioPlaybackController extends ChangeNotifier
   /// Resolves 边听边读 subtitles. Books without generated speech text answer
   /// with an empty track, so this is never treated as an error.
   Future<SubtitleTrack> _loadSubtitles(String itemId, String toneId) {
+    if (request.localOnly) return Future.value(SubtitleTrack.empty);
     final loader = request.subtitleLoader;
     if (loader != null) return loader(itemId, toneId);
     if (request.sourceLoader != null || request.playerFactory != null) {
@@ -173,6 +174,7 @@ class _AudioPlaybackController extends ChangeNotifier
   /// Same shape as [_loadSubtitles]: optional, and an empty answer is normal
   /// (the book has no generated timeline for this tone).
   Future<AudioTimeTrack> _loadTimePoints(String itemId, String toneId) {
+    if (request.localOnly) return Future.value(AudioTimeTrack.empty);
     final loader = request.timePointLoader;
     if (loader != null) return loader(itemId, toneId);
     if (request.sourceLoader != null || request.playerFactory != null) {
@@ -243,6 +245,7 @@ class _AudioPlaybackController extends ChangeNotifier
     final generation = ++_settingsGeneration;
     final history = _history.load(_bookId).catchError((Object _) => null);
     final voices = () async {
+      if (request.localOnly) return <AudioVoice>[_defaultVoice];
       try {
         return await (request.voicesLoader?.call() ??
                 ApiClient.instance.audioVoices(_bookId))
@@ -669,6 +672,7 @@ class _AudioPlaybackController extends ChangeNotifier
     // 排在注入 loader 之前，测试才能覆盖「离线优先」这条真实顺序。
     final local = await _localSource(itemId, _toneId);
     if (local != null) return local;
+    if (request.localOnly) throw StateError('本章音频不在本机，请重新下载');
     final loader = request.sourceLoader;
     if (loader != null) {
       return loader(
@@ -757,7 +761,7 @@ class _AudioPlaybackController extends ChangeNotifier
     try {
       var track = await _loadSubtitles(itemId, toneId);
       var estimated = false;
-      if (track.isEmpty) {
+      if (track.isEmpty && !request.localOnly) {
         // 官方只显示服务端文稿；这里给没有文稿的书补一条估算轨，
         // 用正文 + `/timepoints` 反推（见 audio_subtitle_synth.dart）。
         final synth = await _synthesizeSubtitles(this, itemId);
@@ -1087,6 +1091,7 @@ class _AudioPlaybackController extends ChangeNotifier
       // 官方对「音色下架 / 章节审核中」有专门文案（ug / uj），能识别就用它，
       // 识别不到才回落到通用提示。
       _error =
+          (request.localOnly && error is StateError ? '离线音频不可用，请重新下载' : null) ??
           audioPlayErrorMessage(error, switchedTone: _toneSwitchedForChapter) ??
           (error is TimeoutException
               ? '加载超时，请检查网络后重试。'
@@ -1276,6 +1281,7 @@ class _AudioPlaybackController extends ChangeNotifier
   }
 
   bool get _offline =>
+      request.localOnly ||
       request.sourceLoader != null ||
       request.voicesLoader != null ||
       request.playerFactory != null ||

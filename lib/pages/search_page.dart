@@ -20,19 +20,19 @@ import '../widgets/wenku/wenku_ui.dart';
 import 'detail_page.dart';
 import 'search_shuqi.dart';
 
-typedef SearchPageLoader =
-    Future<List<SearchTab>> Function(
-      String query, {
-      required int tabType,
-      required int offset,
-    });
+typedef SearchPageLoader = Future<List<SearchTab>> Function(
+  String query, {
+  required int tabType,
+  required int offset,
+});
 
 /// Query suggestions for the search field.
 ///
 /// Note: 联想词取 `query_result`、热搜词两层嵌套且有空 cell — 见
 /// .agents/notes/implemented/feature/2026-09-11-discovery-pages.md
-typedef SearchSuggestLoader =
-    Future<List<SearchSuggestion>> Function(String query);
+typedef SearchSuggestLoader = Future<List<SearchSuggestion>> Function(
+  String query,
+);
 
 /// The hot search board.
 typedef HotSearchLoader = Future<HotSearch> Function();
@@ -62,6 +62,7 @@ class SearchPage extends StatefulWidget {
   /// 打开时选中的分类页签。分区入口把语境带进来：短剧分区从漫剧频道进
   /// 搜索落「漫剧」，其余频道落「短剧」；缺省仍是「综合」。
   final SearchCategory initialCategory;
+  final bool audioOnly;
 
   /// Optional discovery sources. Leaving them null fetches from the backend
   /// unless another loader was injected, which marks the caller as offline (the
@@ -82,6 +83,7 @@ class SearchPage extends StatefulWidget {
     this.hotSearchLoader,
     this.shuqiSearchLoader,
     this.initialCategory = SearchCategory.general,
+    this.audioOnly = false,
   });
 
   @override
@@ -90,7 +92,8 @@ class SearchPage extends StatefulWidget {
 
 class _SearchPageState extends State<SearchPage> {
   static const _paginationThreshold = 480.0;
-  static const _categories = SearchCategory.values;
+  List<SearchCategory> get _categories =>
+      widget.audioOnly ? const [SearchCategory.audio] : SearchCategory.values;
   static const _listViewPreference = 'search_list_view';
   static const _minimumScorePreference = 'search_minimum_score';
 
@@ -101,7 +104,7 @@ class _SearchPageState extends State<SearchPage> {
   final ScrollController _scrollController = ScrollController(
     keepScrollOffset: false,
   );
-  List<_SearchFeed> _feeds = [for (final _ in _categories) _SearchFeed()];
+  late List<_SearchFeed> _feeds = [for (final _ in _categories) _SearchFeed()];
   String _query = '';
   String? _idQuery;
   int _tabIndex = 0;
@@ -176,7 +179,9 @@ class _SearchPageState extends State<SearchPage> {
   void initState() {
     super.initState();
     // 首帧就停在该页签：分区入口（短剧/漫剧）进来的搜索不该先闪「综合」。
-    _tabIndex = _categories.indexOf(widget.initialCategory);
+    _tabIndex = widget.audioOnly
+        ? 0
+        : _categories.indexOf(widget.initialCategory);
     _scrollController.addListener(_onScroll);
     _loadHistory();
     unawaited(_loadLayout());
@@ -235,9 +240,8 @@ class _SearchPageState extends State<SearchPage> {
         }
       } catch (_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('评分筛选未保存，本次选择仍有效')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('评分筛选未保存，本次选择仍有效')));
       }
     });
   }
@@ -257,9 +261,8 @@ class _SearchPageState extends State<SearchPage> {
         }
       } catch (_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('视图设置未保存，本次选择仍有效')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('视图设置未保存，本次选择仍有效')));
       }
     });
   }
@@ -672,8 +675,10 @@ class _SearchPageState extends State<SearchPage> {
 
   /// Upstream `_searchTabsHeight`: a 48dp-minimum segmented row plus its
   /// vertical gutters.
-  double _tabsHeight(BuildContext context) =>
-      math.max(48, MediaQuery.textScalerOf(context).scale(14) * 1.4 + 12) + 16;
+  double _tabsHeight(BuildContext context) => widget.audioOnly
+      ? 0
+      : math.max(48, MediaQuery.textScalerOf(context).scale(14) * 1.4 + 12) +
+            16;
 
   /// Upstream body inset inside the padded plane (status bar + toolbar + 20).
   double _bodyTopInset(BuildContext context) =>
@@ -691,7 +696,8 @@ class _SearchPageState extends State<SearchPage> {
             height: FrostedHeader.toolbarHeight,
             child: Center(child: _searchBar(context)),
           ),
-          SizedBox(height: _tabsHeight(context), child: _tabs(context)),
+          if (!widget.audioOnly)
+            SizedBox(height: _tabsHeight(context), child: _tabs(context)),
         ],
       ),
     ),
@@ -719,7 +725,11 @@ class _SearchPageState extends State<SearchPage> {
               showLeading: false,
               autofocus: widget.initialQuery == null,
               controller: _ctrl,
-              hint: _shuqiSource ? '搜索书旗书名或作者' : '搜索名称或作品 ID',
+              hint: widget.audioOnly
+                  ? '搜索有声书名或作者'
+                  : _shuqiSource
+                  ? '搜索书旗书名或作者'
+                  : '搜索名称或作品 ID',
               clearTooltip: '清空',
               onChanged: _onQueryChanged,
               onSubmitted: _search,

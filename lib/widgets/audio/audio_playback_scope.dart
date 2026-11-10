@@ -325,6 +325,7 @@ class _AudioPlaybackScopeState extends State<AudioPlaybackScope> {
       final current = _session;
       if (current != null &&
           !current._closed &&
+          current.request.localOnly == request.localOnly &&
           _sessionBookMatches(request.bookId)) {
         // 别名书（真人讲书的原著）：阅读页传的是原著 id，会话记的是音频
         // 专辑 id。命中别名时只复用，不关闭重开。

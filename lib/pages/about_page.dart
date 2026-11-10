@@ -20,6 +20,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../services/api_client.dart';
+import '../services/app_log.dart';
+import '../services/backend_service.dart';
 import '../services/release_update.dart';
 import '../widgets/home/home_design.dart';
 import '../widgets/settings/settings_widgets.dart';
@@ -37,7 +40,7 @@ class AboutPage extends StatelessWidget {
   /// `version`. Without a package_info dependency the value is
   /// static, so test/about_version_test.dart parses the pubspec and fails the
   /// build check when the two drift apart after a version bump.
-  static const versionText = '1.0.202 (208)';
+  static const versionText = '1.0.202 (209)';
 
   /// Bundled WeChat reward code (赞赏码), shown large in a dialog from the
   /// support card. Copied from .github/wechat.png, the same image the repo's
@@ -139,6 +142,13 @@ class AboutPage extends StatelessWidget {
                         'Wenku8 Flutter 界面来源与许可文本见 assets/licenses/wenku8。',
                   ),
                 ),
+                if (listeningEdition)
+                  _InfoRow(
+                    icon: LucideIcons.activity,
+                    title: '找书故障诊断',
+                    subtitle: '查看本地服务和分类请求的结果',
+                    onTap: () => _showDiscoveryDiagnostic(context),
+                  ),
                 _InfoRow(
                   icon: LucideIcons.code_xml,
                   title: '源代码',
@@ -174,6 +184,56 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+
+  static Future<String> _runDiscoveryDiagnostic() async {
+    final backend = BackendService.instance;
+    final result = <String>[];
+    var stage = '本地服务启动';
+    try {
+      await backend.start().timeout(const Duration(seconds: 18));
+      result.add('$stage成功');
+      stage = '在线分类请求';
+      final categories = await ApiClient.instance
+          .categoryFront(tab: 3)
+          .timeout(const Duration(seconds: 20));
+      result.add('$stage成功，${categories.tiles.length} 个分类');
+    } catch (error) {
+      result.add('$stage失败（${error.runtimeType}）');
+      result.add(error.toString().split('\n').first);
+      if (stage == '本地服务启动') {
+        final lines = backend.logLines;
+        result.addAll(lines.skip(lines.length > 6 ? lines.length - 6 : 0));
+      }
+    }
+    return AppLog.sanitizeLogText(
+      result.join('\n'),
+    ).replaceAll(RegExp(r'https?://\S+'), '[地址已隐藏]');
+  }
+
+  static void _showDiscoveryDiagnostic(BuildContext context) {
+    final result = _runDiscoveryDiagnostic();
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('找书故障诊断'),
+          content: SingleChildScrollView(
+            child: FutureBuilder<String>(
+              future: result,
+              builder: (context, snapshot) =>
+                  SelectableText(snapshot.data ?? '正在检查，最长约 40 秒…'),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('关闭'),
+            ),
+          ],
+        ),
       ),
     );
   }
